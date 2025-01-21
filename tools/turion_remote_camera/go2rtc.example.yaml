@@ -1,0 +1,4 @@
+streams:
+  stream: "exec:./turion_remote_camera.py {IP} bblp {PASSWORD}"
+log:
+  level: debug
