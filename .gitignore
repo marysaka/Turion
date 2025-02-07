@@ -1,4 +1,6 @@
 *.o
+*.so
+target
 tools/bambu_remote_camera_with_blobs/bambu_remote_camera_with_blobs
 tools/turion_remote_camera/go2rtc.yaml
 tools/turion_remote_camera/go2rtc_linux_amd64
