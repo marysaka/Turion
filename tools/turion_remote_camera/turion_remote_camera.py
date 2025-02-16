@@ -13,15 +13,28 @@ context.check_hostname = False
 context.verify_mode = ssl.CERT_NONE
 
 BAMBU_CAMERA_STREAM = 0x3000
-BAMBU_CAMERA_START = 0x40
-BAMBU_CAMERA_STOP = 0x00
 
 
-def generate_packet(username: str, password: str, word0: int, word1: int) -> bytes:
+def generate_header_packet(
+    size: int, packet_type: int, flags: int, word3: int
+) -> bytes:
     res = struct.pack(
-        "IIxxxxxxxx32s32s",
-        word0,
-        word1,
+        "IIII",
+        size,
+        packet_type,
+        flags,
+        word3,
+    )
+    return res
+
+
+def generate_login_packet(
+    username: str,
+    password: str,
+) -> bytes:
+    res = generate_header_packet(0x40, BAMBU_CAMERA_STREAM, 0, 0)
+    res += struct.pack(
+        "32s32s",
         username.encode("utf8"),
         password.encode("utf8"),
     )
@@ -60,11 +73,7 @@ args = parser.parse_args()
 
 with socket.create_connection((args.host, 6000)) as sock:
     with context.wrap_socket(sock) as ssock:
-        ssock.write(
-            generate_packet(
-                args.username, args.password, BAMBU_CAMERA_START, BAMBU_CAMERA_STREAM
-            )
-        )
+        ssock.write(generate_login_packet(args.username, args.password))
 
         while True:
             handle_packets(ssock)
