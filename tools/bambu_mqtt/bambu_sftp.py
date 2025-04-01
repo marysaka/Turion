@@ -72,3 +72,20 @@ class BambuSFTP(object):
                 conn.sendall(buf)
 
         self.sftp.voidresp()
+
+    def enter_create_directories(self, dir_path: str):
+        if dir_path != "":
+            try:
+                self.sftp.cwd(dir_path)
+            except Exception:
+                self.enter_create_directories("/".join(dir_path.split("/")[:-1]))
+                self.sftp.mkd(dir_path)
+                self.sftp.cwd(dir_path)
+
+    def store_data(self, file_name: str, raw_data: bytes):
+        self.sftp.voidcmd("TYPE I")
+
+        with self.sftp.transfercmd(f"STOR {file_name}", None) as conn:
+            conn.sendall(raw_data)
+
+        self.sftp.voidresp()
