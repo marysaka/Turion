@@ -23,7 +23,7 @@ args = parser.parse_args()
 
 project_file_path = args.project_file_path
 project_printer_path = os.path.basename(project_file_path)
-project_printer_url = f"ftp://sdcard/{project_printer_path}"
+project_printer_url = f"file:///sdcard/{project_printer_path}"
 ams_mapping = args.ams_mapping
 
 # Default an AMS mapping if it should be in use
