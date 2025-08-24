@@ -81,6 +81,7 @@ class PrintHandler(BaseRequestHandler):
         first_entry_key = next(iter(self.request.files))
         file_info = self.request.files[first_entry_key][0]
         file_name: str = file_info["filename"]
+        file_name = file_name.replace(" ", "")
         file_data = file_info["body"]
 
         with open(file_name, "wb") as f:
