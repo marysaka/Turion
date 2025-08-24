@@ -7,9 +7,16 @@ import json
 import tornado.httpserver, tornado.web
 import os
 import time
+import yaml
+import sys
+
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 
 
-def parse_x_api_key(raw: str) -> Optional[Dict[str, str]]:
+def parse_x_api_key(config, raw: str) -> Optional[Dict[str, str]]:
     res = dict()
 
     for raw_entry in raw.split(";"):
@@ -20,31 +27,61 @@ def parse_x_api_key(raw: str) -> Optional[Dict[str, str]]:
 
         res[parts[0]] = parts[1]
 
-    if not res.get("host") or not res.get("pass"):
+    if (not res.get("host") or not res.get("pass")) and not res.get("printer_name"):
         return None
 
-    res["user"] = res.get("user", "bblp")
-    res["timelapse"] = res.get("timelapse", "false") == "true"
-    res["bed_type"] = res.get("bed_type", "auto")
-    res["bed_levelling"] = res.get("bed_levelling", "true") == "true"
-    res["flow_calibration"] = res.get("flow_calibration", "true") == "true"
-    res["vibration_calibration"] = res.get("vibration_calibration", "true") == "true"
-    res["layer_inspect"] = res.get("layer_inspect", "true") == "true"
+    if "printer_name" in res:
+        if config is None:
+            return None
+
+        if not res["printer_name"] in config:
+            return None
+        template = config[res["printer_name"]]
+        res["host"] = template.get("host")
+        res["user"] = template.get("user", "bblp")
+        res["pass"] = template.get("pass")
+        res["timelapse"] = template.get("timelapse", False)
+        res["bed_type"] = template.get("bed_type", "auto")
+        res["bed_levelling"] = template.get("bed_levelling", True)
+        res["flow_calibration"] = template.get("flow_calibration", True)
+        res["vibration_calibration"] = template.get("vibration_calibration", True)
+        res["layer_inspect"] = template.get("layer_inspect", True)
+        res["ams_mapping"] = res.get("ams_mapping", "")
+    else:
+        res["user"] = res.get("user", "bblp")
+        res["timelapse"] = res.get("timelapse", "false") == "true"
+        res["bed_type"] = res.get("bed_type", "auto")
+        res["bed_levelling"] = res.get("bed_levelling", "true") == "true"
+        res["flow_calibration"] = res.get("flow_calibration", "true") == "true"
+        res["vibration_calibration"] = (
+            res.get("vibration_calibration", "true") == "true"
+        )
+        res["layer_inspect"] = res.get("layer_inspect", "true") == "true"
+
     tmp_ams_mapping = res.get("ams_mapping", "").split(",")
 
     res["ams_mapping"] = list()
     for entry in tmp_ams_mapping:
+        entry = entry.strip()
+        if len(entry) == 0:
+            continue
+
         res["ams_mapping"].append(int(entry))
 
     return res
 
 
 class BaseRequestHandler(tornado.web.RequestHandler):
+    def initialize(self, config):
+        self.config = config
+
     def prepare(self):
         if "X-Api-Key" not in self.request.headers:
             raise tornado.web.HTTPError(401, "Missing X-Api-Key")
 
-        self.serv_config = parse_x_api_key(self.request.headers["X-Api-Key"])
+        self.serv_config = parse_x_api_key(
+            self.config, self.request.headers["X-Api-Key"]
+        )
 
         if not self.serv_config:
             raise tornado.web.HTTPError(401)
@@ -83,9 +120,6 @@ class PrintHandler(BaseRequestHandler):
         file_name: str = file_info["filename"]
         file_name = file_name.replace(" ", "")
         file_data = file_info["body"]
-
-        with open(file_name, "wb") as f:
-            f.write(file_data)
 
         # We only support 3MF with embedded GCODE
         if not file_name.endswith(".3mf"):
@@ -141,8 +175,17 @@ class PrintHandler(BaseRequestHandler):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], "rb") as f:
+            config = yaml.load(f.read(), Loader=Loader)
+    else:
+        config = None
+
     application = tornado.web.Application(
-        [(r"/api/version", IndexHandler), (r"/api/files/local", PrintHandler)],
+        [
+            (r"/api/version", IndexHandler, dict(config=config)),
+            (r"/api/files/local", PrintHandler, dict(config=config)),
+        ],
         debug=False,
     )
 
